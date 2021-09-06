@@ -292,6 +292,7 @@ class Window(Gtk.ApplicationWindow):
     
 
         self.icon_view = Gtk.IconView()
+        #self.icon_view.set_selection_mode(Gtk.SelectionMode.MULTIPLE)
         self.icon_view.set_model(self.model)
         self.icon_view.set_item_width(100)
         self.icon_view.set_text_column(0)
@@ -312,6 +313,13 @@ class Window(Gtk.ApplicationWindow):
         self.tag_label.set_text("Info")
         self.tag_label.set_line_wrap(True)
         self.tag_label.set_max_width_chars(80)
+
+        self.transfer_button = Gtk.Button.new_from_icon_name("list-add", 2)
+        self.transfer_button.set_label("add to RadioApp")
+        self.transfer_button.set_tooltip_text("add to RadioApp")
+        self.transfer_button.set_relief(2)
+        self.transfer_button.connect("clicked", self.transfer_channel)
+        self.status_bar.add(self.transfer_button)
         
         self.save_button = Gtk.Button.new_from_icon_name("document-save", 2)
         self.save_button.set_label("Save as m3u Playlist")
@@ -332,6 +340,17 @@ class Window(Gtk.ApplicationWindow):
         self.bus.enable_sync_message_emission()
         self.bus.add_signal_watch()
         self.bus.connect('message::tag', self.on_tag)
+        
+    def transfer_channel(self, *args):
+        selected_path = self.icon_view.get_selected_items()[0]
+        selected_iter = self.icon_view.get_model().get_iter(selected_path)
+
+        name = self.icon_view.get_model().get_value(selected_iter, 0)
+        url = self.icon_view.get_model().get_value(selected_iter, 1)
+        channel = f"[{name}]\nurl={url}"
+        print(channel)
+        with open("config", 'a') as f:
+            f.write(f"\n{channel}")
             
             
     def set_volume(self, *args):
@@ -353,9 +372,11 @@ class Window(Gtk.ApplicationWindow):
         url = self.model[path][1]
         if url.endswith(".pls"):
             url = self.getURLfromPLS(url)
-        if url.endswith(".m3u"):
-            url = self.getURLfromM3U(url)        
-        print(url)
+        elif url.endswith(".m3u"):
+            url = self.getURLfromM3U(url)
+        else:
+            url = self.model[path][1]
+        print(f"{self.model[path][0]} - {url}")
         self.playbin.set_state(Gst.State.NULL)
         self.playbin.set_property('uri', url)
         self.playbin.set_state(Gst.State.PLAYING)
@@ -415,48 +436,44 @@ class Window(Gtk.ApplicationWindow):
             self.tag_label.set_text(f"found no stations that contains '{mysearch}'")
                     
     def getURLfromPLS(self, inURL):
-        print("detecting", inURL)
-        t = ""
+        headers = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.12; rv:55.0) Gecko/20100101 Firefox/55.0',
+                    }
+        print("pls detecting", inURL)
+        url = ""
         if "&" in inURL:
             inURL = inURL.partition("&")[0]
-        response = requests.get(inURL)
-        print(response.text)
+        response = requests.get(inURL, headers = headers)
         if "http" in response.text:
             html = response.text.splitlines()
-            if len(html) > 3:
-                if "http" in str(html[1]):
-                    t = str(html[1])
-                elif "http" in str(html[2]):
-                    t = str(html[2])
-                elif "http" in str(html[3]):
-                    t = str(html[3])
-            elif len(html) > 2:
-                if "http" in str(html[1]):
-                    t = str(html[1])
-                elif "http" in str(html[2]):
-                    t = str(html[2])
-            else:
-                t = str(html[0])
-            url = t.partition("=")[2].partition("'")[0]
+            for line in html:
+                if "http" in line:
+                    url = f'http{line.split("http")[1]}'
+                    break
+            print(url)
             return (url)
         else:
-           print("Liste schlecht formatiert") 
+           print("no urls found") 
     
     def getURLfromM3U(self, inURL):
-        print("detecting", inURL)
-        response = requests.get(inURL)
-        html = response.text.splitlines()
-        print(html)
-        if "#EXTINF" in str(html):
-            url = str(html[1]).partition("http://")[2].partition('"')[0]
-            url = f"http://{url}"
-        else:       
-            if len(html) > 1:
-                url = str(html[1])
-            else:
-                url = str(html[0])
-        print(url)
-        return(url)
+        headers = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.12; rv:55.0) Gecko/20100101 Firefox/55.0',
+                    }
+        print("m3u detecting", inURL)
+        url = ""
+        if "&" in inURL:
+            inURL = inURL.partition("&")[0]
+        response = requests.get(inURL, headers = headers)
+        if "http" in response.text:
+            html = response.text.splitlines()
+            for line in html:
+                if "http" in line:
+                    url = f'http{line.split("http")[1]}'
+                    break
+            print(url)
+            return (url)
+        else:
+           print("no urls found") 
         
     def save_playlist(self, *args):
         if self.playlist == "" or self.playlist == "#EXTM3U\n":
@@ -484,6 +501,7 @@ class Window(Gtk.ApplicationWindow):
 if __name__ == '__main__':
     window = Window()
     window.set_volume()
-    window.move(0, 0)
+    window.move(50, 50)
     window.show_all()
+    window.search_entry.grab_focus()
     Gtk.main()
