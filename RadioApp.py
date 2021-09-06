@@ -8,20 +8,66 @@ extended by Axel Schneider
 https://github.com/Axel-Erfurt
 """
 import gi
-gi.require_versions({'Gtk': '3.0', 'Gst': '1.0'})
+gi.require_versions({'Gtk': '3.0', 'Gdk': '3.0', 'Gst': '1.0'})
 import configparser
 import os
-from gi.repository import Gtk, GdkPixbuf, Gst
+from gi.repository import Gtk, Gdk, GdkPixbuf, Gst
 import requests
 
-#CONFIG_FOLDER = os.path.expanduser('~/.config/radio')
 CONFIG = configparser.ConfigParser()
 CONFIG.read('config')
 
+CSS = """
+headerbar entry {
+    margin-top: 10px;
+    margin-bottom: 10px;
+    background: #ddd;
+}
+headerbar {
+    min-height: 24px;
+    padding-left: 2px;
+    padding-right: 2px;
+    margin: 0px;
+    padding: 10px;
+    background: #aabbcc;
+    border: 0px;
+}
+headerbar label {
+    font-size: 10pt;
+    color: #5b5b5b;
+}
+label {
+    color: #3465a4;
+    font-size: 8pt;
+}
+
+statusbar label {
+    color: #555753;
+    font-size: 9pt;
+    font-weight: bold;
+}
+window, iconview {
+    background: #ddd;
+    color: #555753;
+}
+iconview:selected {
+    background: #aabbcc;
+    color: #222;
+}
+"""
 
 class Window(Gtk.ApplicationWindow):
     def __init__(self):
         super(Gtk.ApplicationWindow, self).__init__()
+        
+        # style
+        provider = Gtk.CssProvider()
+        provider.load_from_data(bytes(CSS.encode()))
+        style = self.get_style_context()
+        screen = Gdk.Screen.get_default()
+        priority = Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        style.add_provider_for_screen(screen, provider, priority)
+        
         self.set_title('Radio Player')
         self.set_icon_name('applications-multimedia')
         self.connect("destroy",Gtk.main_quit)
@@ -107,26 +153,11 @@ class Window(Gtk.ApplicationWindow):
             
     def refresh_filter(self,widget):
         self.filter.refilter()
-            
-    def filter_channels(self, *args):
-        return
         
     def visible_cb(self, model, iter, data=None):
         search_query = self.search_entry.get_text().lower()
-        active_category = 0
-
-        if search_query == "":
-            return True
-
-        for col in range(1,self.icon_view.get_columns()):
-            value = model.get_value(iter, col).lower()
-            if value.startswith(search_query):
-                return True
-
-            return False
-
-        value = model.get_value(iter, active_category).lower()
-        return True if value.startswith(search_query) else False
+        value = model.get_value(iter, 0).lower()
+        return True if search_query in value else False
             
     def set_volume(self, *args):
         vol = self.vol_slider.get_value()
@@ -164,12 +195,13 @@ class Window(Gtk.ApplicationWindow):
         
     def on_tag(self, bus, msg):
         taglist = msg.parse_tag()
-        my_tag = f'{taglist.get_string(taglist.nth_tag_name(0)).value}'
-        if my_tag:
-            if not self.old_tag == my_tag and not my_tag == "None":
-                print(my_tag)
-                self.tag_label.set_text(my_tag)
-                self.old_tag = my_tag
+        if taglist.get_string(taglist.nth_tag_name(0)):
+            my_tag = f'{taglist.get_string(taglist.nth_tag_name(0)).value}'
+            if my_tag:
+                if not self.old_tag == my_tag and not my_tag == "None":
+                    print(my_tag)
+                    self.tag_label.set_text(my_tag)
+                    self.old_tag = my_tag
 
     def getURLfromPLS(self, inURL):
         headers = {

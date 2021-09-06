@@ -18,6 +18,7 @@ headerbar {
     margin: 0px;
     padding: 10px;
     background: #aabbcc;
+    border: 0px;
 }
 headerbar label {
     font-size: 10pt;
@@ -391,7 +392,7 @@ class Window(Gtk.ApplicationWindow):
         
     def on_tag(self, bus, msg):
         taglist = msg.parse_tag()
-        if taglist:
+        if taglist.get_string(taglist.nth_tag_name(0)):
             my_tag = f'{taglist.get_string(taglist.nth_tag_name(0)).value}'
             if my_tag:
                 if not self.old_tag == my_tag and not my_tag == "None":
