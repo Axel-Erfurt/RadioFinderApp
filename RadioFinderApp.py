@@ -17,16 +17,22 @@ headerbar {
     padding-right: 2px;
     margin: 0px;
     padding: 10px;
-    background: #aabbcc;
+    background: lightsteelblue;
     border: 0px;
 }
 headerbar label {
     font-size: 10pt;
     color: #5b5b5b;
 }
-label {
+#tag_label {
     color: #3465a4;
     font-size: 8pt;
+    font-weight: bold;
+}
+#volume_label {
+    color: #777;
+    font-size: 9pt;
+    font-weight: bold;
 }
 statusbar label {
     color: #222;
@@ -37,7 +43,7 @@ window, iconview {
     color: #555753;
 }
 iconview:selected {
-    background: #729fcf;
+    background: lightsteelblue;
     color: #222;
 }
 """
@@ -240,6 +246,7 @@ class Window(Gtk.ApplicationWindow):
         
         self.set_default_size(750, 400)
         #self.set_resizable(False)
+        
         # style
         provider = Gtk.CssProvider()
         provider.load_from_data(bytes(CSS.encode()))
@@ -285,15 +292,14 @@ class Window(Gtk.ApplicationWindow):
         self.search_entry.connect("activate", self.find_stations)
 
         self.header.add(self.stop_button)        
-        self.header.add(self.search_entry)        
         self.header.add(self.mute_button)
+        self.header.pack_end(self.search_entry)   
 
         self.model = Gtk.ListStore(object)
         self.model.set_column_types((str, str, GdkPixbuf.Pixbuf))
     
 
         self.icon_view = Gtk.IconView()
-        #self.icon_view.set_selection_mode(Gtk.SelectionMode.MULTIPLE)
         self.icon_view.set_model(self.model)
         self.icon_view.set_item_width(100)
         self.icon_view.set_text_column(0)
@@ -301,19 +307,27 @@ class Window(Gtk.ApplicationWindow):
         self.icon_view.set_activate_on_single_click(True)
         self.icon_view.connect('item-activated', self.play)
 
-        scroll = Gtk.ScrolledWindow()
-        scroll.add(self.icon_view)
+        self.scroll = Gtk.ScrolledWindow()
+        self.scroll.add(self.icon_view)
         
         vbox = Gtk.VBox()
         self.add(vbox)
         
-        vbox.pack_start(scroll, True, True, 0)
+        vbox.pack_start(self.scroll, True, True, 0)
+        
+        vol = f"{self.vol_slider.get_value() * 100:.0f}"
         
         self.status_bar = Gtk.Statusbar()
+        self.volume_label = Gtk.Label(label = f"Volume: {vol}")
+        self.volume_label.set_name("volume_label")
+        self.status_bar.pack_start(self.volume_label, True, False, 0)
+        
         self.tag_label = Gtk.Label()
+        self.tag_label.set_name("tag_label")
         self.tag_label.set_text("Info")
         self.tag_label.set_line_wrap(True)
-        self.tag_label.set_max_width_chars(80)
+        self.tag_label.set_line_wrap_mode(0)
+        self.tag_label.set_max_width_chars(50)
 
         self.transfer_button = Gtk.Button.new_from_icon_name("list-add", 2)
         self.transfer_button.set_label("add to RadioApp")
@@ -356,7 +370,7 @@ class Window(Gtk.ApplicationWindow):
             
     def set_volume(self, *args):
         vol = self.vol_slider.get_value()
-        print(f"Volume: {vol:.2f}")
+        self.volume_label.set_text(f"Volume: {vol * 100:.0f}")
         self.playbin.set_property("volume", vol)
         
     def set_mute_status(self, *args):
@@ -392,13 +406,14 @@ class Window(Gtk.ApplicationWindow):
         
     def on_tag(self, bus, msg):
         taglist = msg.parse_tag()
-        if taglist.get_string(taglist.nth_tag_name(0)):
-            my_tag = f'{taglist.get_string(taglist.nth_tag_name(0)).value}'
-            if my_tag:
-                if not self.old_tag == my_tag and not my_tag == "None":
-                    print(my_tag)
-                    self.tag_label.set_text(my_tag)
-                    self.old_tag = my_tag
+        if taglist:
+            if not taglist.get_string(taglist.nth_tag_name(0)).value == None:
+                my_tag = f'{taglist.get_string(taglist.nth_tag_name(0)).value}'
+                if my_tag:
+                    if not self.old_tag == my_tag and not my_tag == "None":
+                        print(my_tag)
+                        self.tag_label.set_text(my_tag)
+                        self.old_tag = my_tag
 
     def find_stations(self, *args):
         self.playlist = "#EXTM3U\n"
@@ -425,14 +440,13 @@ class Window(Gtk.ApplicationWindow):
                     n = value.replace(",", " ")
                 if str(key) == "url":
                     m = value
-                    #print("%s,%s" % (n, m))
                     icon = Gtk.IconTheme.get_default().load_icon(
                     'multimedia-volume-control', 16, Gtk.IconLookupFlags.USE_BUILTIN)
                     self.model.append((n, m, icon))
                     self.playlist += f"#EXTINF:{i+1},{n}\n{m}\n"
         if i > 0:
-            self.tag_label.set_text(f"found {i} stations that contains '{mysearch}'")          
-            #print(self.playlist)
+            self.tag_label.set_text(f"found {i} stations that contains '{mysearch}'")
+            self.scroll.get_vadjustment().set_value(0)
         else:
             self.tag_label.set_text(f"found no stations that contains '{mysearch}'")
                     
@@ -502,7 +516,7 @@ class Window(Gtk.ApplicationWindow):
 if __name__ == '__main__':
     window = Window()
     window.set_volume()
-    window.move(50, 50)
+    window.move(0, 30)
     window.show_all()
     window.search_entry.grab_focus()
     Gtk.main()

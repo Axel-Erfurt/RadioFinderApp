@@ -17,6 +17,7 @@ import requests
 CONFIG = configparser.ConfigParser()
 CONFIG.read('config')
 
+
 CSS = """
 headerbar entry {
     margin-top: 10px;
@@ -29,29 +30,30 @@ headerbar {
     padding-right: 2px;
     margin: 0px;
     padding: 10px;
-    background: #aabbcc;
+    background: lightsteelblue;
     border: 0px;
 }
 headerbar label {
     font-size: 10pt;
     color: #5b5b5b;
 }
-label {
-    color: #3465a4;
+#volume_label {
+    color: #555753;
     font-size: 8pt;
 }
-
-statusbar label {
+#tag_label {
     color: #555753;
     font-size: 9pt;
     font-weight: bold;
+    padding-top: 6px;
+    padding-bottom: 4px;
 }
 window, iconview {
     background: #ddd;
     color: #555753;
 }
 iconview:selected {
-    background: #aabbcc;
+    background: lightsteelblue;
     color: #222;
 }
 """
@@ -104,8 +106,8 @@ class Window(Gtk.ApplicationWindow):
         self.search_entry.connect("changed", self.refresh_filter)
 
         self.header.add(self.stop_button)        
-        self.header.add(self.search_entry)        
         self.header.add(self.mute_button)
+        self.header.pack_end(self.search_entry)
 
         self.model = Gtk.ListStore(object)
         self.model.set_column_types((str, str, GdkPixbuf.Pixbuf))
@@ -128,13 +130,20 @@ class Window(Gtk.ApplicationWindow):
         self.add(vbox)
         
         vbox.pack_start(scroll, True, True, 0)
+
+        vol = f"{self.vol_slider.get_value() * 100:.0f}"
+        self.volume_label = Gtk.Label(label = f"Volume: {vol}")
+        self.volume_label.set_name("volume_label")
+        vbox.pack_end(self.volume_label, False, False, 0)
         
-        self.status_bar = Gtk.Statusbar()
         self.tag_label = Gtk.Label()
+        self.tag_label.set_name("tag_label")
         self.tag_label.set_text("Info")
-        self.status_bar.add(self.tag_label)
-        
-        vbox.pack_start(self.status_bar, False, True, 0)
+        self.tag_label.set_line_wrap(True)
+        self.tag_label.set_line_wrap_mode(0)
+        self.tag_label.set_max_width_chars(50)
+        self.tag_label.set_halign(Gtk.Align.CENTER)
+        vbox.pack_end(self.tag_label, False, True, 0)
 
         Gst.init('')
         self.playbin = Gst.ElementFactory.make('playbin', 'player')
@@ -145,7 +154,9 @@ class Window(Gtk.ApplicationWindow):
         self.bus.enable_sync_message_emission()
         self.bus.add_signal_watch()
         self.bus.connect('message::tag', self.on_tag)
+        self.read_channels()
 
+    def read_channels(self):
         for section in CONFIG.sections():
             icon = Gtk.IconTheme.get_default().load_icon(
                     'multimedia-volume-control', 16, Gtk.IconLookupFlags.USE_BUILTIN)
@@ -161,18 +172,21 @@ class Window(Gtk.ApplicationWindow):
             
     def set_volume(self, *args):
         vol = self.vol_slider.get_value()
-        print(f"Volume: {vol:.2f}")
+        self.volume_label.set_text(f"Volume: {vol * 100:.0f}")
         self.playbin.set_property("volume", vol)
         
     def set_mute_status(self, *args):
+        vol = self.vol_slider.get_value()
         if self.playbin.get_property("mute") == True:
             self.playbin.set_property("mute", False)
             self.mute_button.set_image(Gtk.Image.new_from_icon_name(
                     'audio-volume-high', 2))
+            self.volume_label.set_text(f"Volume: {vol * 100:.0f}")
         else:
             self.playbin.set_property("mute", True)
             self.mute_button.set_image(Gtk.Image.new_from_icon_name(
                     'audio-volume-muted', 2))
+            self.volume_label.set_text(f"Volume: {vol * 100:.0f} muted")
 
     def play(self, view, path):
         url = self.model[path][1]
@@ -194,14 +208,16 @@ class Window(Gtk.ApplicationWindow):
         self.stop_button.set_sensitive(False)
         
     def on_tag(self, bus, msg):
-        taglist = msg.parse_tag()
-        if taglist.get_string(taglist.nth_tag_name(0)):
-            my_tag = f'{taglist.get_string(taglist.nth_tag_name(0)).value}'
-            if my_tag:
-                if not self.old_tag == my_tag and not my_tag == "None":
-                    print(my_tag)
-                    self.tag_label.set_text(my_tag)
-                    self.old_tag = my_tag
+        if msg:
+            taglist = msg.parse_tag()
+            if taglist:
+                if not taglist.get_string(taglist.nth_tag_name(0)).value == None:
+                    my_tag = f'{taglist.get_string(taglist.nth_tag_name(0)).value}'
+                    if my_tag:
+                        if not self.old_tag == my_tag and not my_tag == "None":
+                            print(my_tag)
+                            self.tag_label.set_text(my_tag)
+                            self.old_tag = my_tag
 
     def getURLfromPLS(self, inURL):
         headers = {
@@ -248,7 +264,7 @@ class Window(Gtk.ApplicationWindow):
 if __name__ == '__main__':
     window = Window()
     window.set_volume()
-    window.resize(600, 230)
+    window.resize(720, 320)
     window.move(0, 0)
     window.show_all()
     Gtk.main()
