@@ -186,6 +186,7 @@ class Window(Gtk.ApplicationWindow):
         self.header.add(self.mute_button)
         self.header.pack_end(self.search_entry)   
 
+
         self.model = Gtk.ListStore(object)
         self.model.set_column_types((str, str, GdkPixbuf.Pixbuf))
     
@@ -209,6 +210,18 @@ class Window(Gtk.ApplicationWindow):
         vol = f"{self.vol_slider.get_value() * 100:.0f}"
         
         self.status_bar = Gtk.Statusbar()
+        
+        country_code_label = Gtk.Label(label = "Country Code: ")
+        self.status_bar.add(country_code_label) 
+        self.country_code = Gtk.Entry(tooltip_text = ("Country Code\nfor example:\
+        \nde = Germany\ngb = Great Britain\nleave empty for None\
+        \n\nedit and press Return"))
+        self.country_code.set_max_length(2)
+        self.country_code.set_max_width_chars(2)
+        self.country_code.set_width_chars(2)
+        self.country_code.connect("activate", self.find_stations)
+        self.status_bar.add(self.country_code) 
+        
         self.volume_label = Gtk.Label(label = f"Volume: {vol}")
         self.volume_label.set_name("volume_label")
         self.status_bar.pack_start(self.volume_label, True, False, 0)
@@ -315,7 +328,13 @@ class Window(Gtk.ApplicationWindow):
             self.tag_label.set_text("please enter search term")
             return
         rb = RadioBrowser()
-        myparams = {'name': 'search', 'nameExact': 'false'}
+        if self.country_code.get_text() == "":
+            print("country_code:", "None")
+            myparams = {'name': 'search', 'nameExact': 'false'}
+        else:
+            country_code = self.country_code.get_text()
+            print("country_code:", country_code)
+            myparams = {'name': 'search', 'nameExact': 'false', 'countrycode': country_code}
         
         for key in myparams.keys():
                 if key == "name":
