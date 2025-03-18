@@ -30,12 +30,19 @@ class RadioWindow(Gtk.ApplicationWindow):
         self.set_icon_name('applications-multimedia')
         self.old_tag = ""
         
+        self.connect("close-request", self.handle_close)
+        
         self.set_size_request(720, 600)
 
         self.header = Gtk.HeaderBar()
         #self.set_title('Radio Player')
         self.header.set_show_title_buttons(True)
         self.set_titlebar(self.header)
+        
+        self.remove_button = Gtk.Button.new_from_icon_name('edit-delete')
+        self.remove_button.connect("clicked", self.delete_channel)
+        
+        self.header.pack_start(self.remove_button)
 
         self.stop_button = Gtk.Button.new_from_icon_name('media-playback-stop-symbolic')
         self.stop_button.set_sensitive(False)
@@ -94,7 +101,7 @@ class RadioWindow(Gtk.ApplicationWindow):
         self.tag_label = Gtk.Label()
         self.tag_label.set_name("tag_label")
         self.tag_label.set_text("Info")
-        self.tag_label.set_wrap_mode(0)
+        self.tag_label.set_wrap_mode(2)
         self.tag_label.set_max_width_chars(100)
         self.tag_label.set_halign(Gtk.Align.CENTER)
         vbox.append(self.tag_label)
@@ -109,6 +116,26 @@ class RadioWindow(Gtk.ApplicationWindow):
         self.bus.add_signal_watch()
         self.bus.connect('message::tag', self.on_tag)
         self.read_channels()
+        
+    def handle_close(self, *args):
+        channels = ""
+        item = self.model.get_iter_first ()
+
+        while ( item != None ):
+            channels += (f"[{self.model.get_value (item, 0)}]\nurl={self.model.get_value (item, 1)}\n")
+            item = self.model.iter_next(item)
+
+        with open("config", "w") as f:
+            f.write(channels)
+        
+    def delete_channel(self, path, *args):
+        iter = self.model.get_iter(self.icon_view.get_selected_items()[0])
+        path = self.icon_view.get_selected_items()[0]
+        name = self.model.get_value (iter, 0)
+        self.model.remove(iter)
+        print(f"{name} removed")
+        self.icon_view.select_path(path)
+        self.icon_view.emit("item-activated", path)
 
     def read_channels(self):
         for section in CONFIG.sections():
