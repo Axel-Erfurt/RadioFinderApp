@@ -7,7 +7,9 @@ Gtk Web Radio Search
 - Gtk3 or Gtk4
 
 Gtk3 Version
+
 ![screenshot](https://raw.githubusercontent.com/Axel-Erfurt/RadioFinderApp/main/screenshot.png)
 
 Gtk4 Version
+
 ![screenshot](https://raw.githubusercontent.com/Axel-Erfurt/RadioFinderApp/main/screenshot4.png)
