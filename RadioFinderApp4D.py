@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import gi
@@ -140,8 +140,8 @@ class FinderWindow(Gtk.ApplicationWindow):
         self.mute_button.connect("clicked", self.set_mute_status)
         
         
-        self.search_entry = Gtk.SearchEntry(placeholder_text = "find radio station ...", 
-                                            tooltip_text = "find radio station...", 
+        self.search_entry = Gtk.SearchEntry(placeholder_text = "find radio stations ...", 
+                                            tooltip_text = "find radio stations ...\nyou can use country code at bottom\n or search without country code", 
                                             margin_start=6, margin_end=0)
         self.search_entry.connect("activate", self.find_stations)
 
@@ -185,7 +185,9 @@ class FinderWindow(Gtk.ApplicationWindow):
         self.filter.set_visible_func(self.visible_cb)
         favbox = Gtk.Box(orientation=1, homogeneous=False)
         
-        self.search_fav_entry = Gtk.SearchEntry(placeholder_text = "find in favorites ...", margin_start=0, margin_end=6)
+        self.search_fav_entry = Gtk.SearchEntry(placeholder_text = "filter favorites ...", 
+                                                tooltip_text = "filter favorites ...", 
+                                                margin_start=0, margin_end=6)
         self.search_fav_entry.connect("changed", self.refresh_filter)       
 
         self.icon_view_radio = Gtk.IconView()
@@ -254,13 +256,13 @@ class FinderWindow(Gtk.ApplicationWindow):
         
         self.transfer_button = Gtk.Button.new_from_icon_name("list-add")
         self.transfer_button.set_label("add to Favorites")
-        self.transfer_button.set_tooltip_text("add to RadioApp")
+        self.transfer_button.set_tooltip_text("add selected station to Favorites")
         self.transfer_button.connect("clicked", self.transfer_channel)
         self.status_bar.append(self.transfer_button)
         
         self.save_button = Gtk.Button.new_from_icon_name("document-save")
-        self.save_button.set_label("Save as m3u Playlist")
-        self.save_button.set_tooltip_text("Save as m3u Playlist")
+        self.save_button.set_label("Save m3u Playlist")
+        self.save_button.set_tooltip_text("Save all the stations found as a m3u playlist")
         self.save_button.connect("clicked", self.save_playlist)
         self.status_bar.append(self.save_button)
         
@@ -278,6 +280,8 @@ class FinderWindow(Gtk.ApplicationWindow):
         self.bus.connect('message::tag', self.on_tag)
         
         self.read_channels()
+        
+        self.search_entry.grab_focus()
         
     def refresh_filter(self,widget):
         self.filter.refilter()
