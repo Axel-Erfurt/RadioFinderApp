@@ -3,7 +3,7 @@
 
 import gi
 gi.require_versions({'Gtk': '4.0', 'Gst': '1.0', 'Adw': '1'})
-from gi.repository import Gtk, GdkPixbuf, Gst, Gio, Adw
+from gi.repository import Gtk, GdkPixbuf, Gst, Gio, Adw, GObject
 import requests
 import configparser
 import sys
@@ -14,6 +14,43 @@ warnings.filterwarnings("ignore")
 
 CONFIG = configparser.ConfigParser()
 #CONFIG.read('config_d')
+
+all_country_codes = """All Countries    
+United States    US
+Canada    CA
+Germany    DE
+United Kingdom    GB
+Austria    AT
+Belgium    BE
+Bulgaria    BG
+Croatia    HR
+Cyprus    CY
+Czechia    CZ
+Denmark    DK
+Estonia    EE
+Finland    FI
+France    FR
+Greece    GR
+Hungary    HU
+Ireland    IE
+Iceland    IS
+Italy    IT
+Latvia    LV
+Lithuania    LT
+Luxembourg    LU
+Malta    MT
+Mexico    MX
+Netherlands    NL
+Norway    NO
+Poland    PL
+Portugal    PT
+Romania    RO
+Serbia    RS
+Slovakia    SK
+Slovenia    SI
+Spain    ES
+Switzerland    CH
+Sweden    SE"""
 
 BASE_URL =  "https://de1.api.radio-browser.info/"
 
@@ -72,7 +109,17 @@ class EndPointBuilder:
         self._endpoint = parts["endpoint"]
         parts.update({"fmt": self.fmt})
         return self.endpoint.format(**parts)
+        
+class Widget(GObject.Object):
+    __gtype_name__ = 'Widget'
 
+    def __init__(self, name):
+        super().__init__()
+        self._name = name
+
+    @GObject.Property
+    def name(self):
+        return self._name
 
 class RadioBrowser:
     def __init__(self, fmt="json"):
@@ -102,6 +149,9 @@ class RadioBrowser:
 class FinderWindow(Gtk.ApplicationWindow):
     def __init__(self, *args, **kwargs):
         super().__init__(title="Radio Finder", *args, **kwargs)
+        
+        self.search_text_widget = '' # Initial search text for widgets
+        self.search_text_method = '' # Initial search text for methods
         
         self.set_size_request(660, 300)
         self.set_default_size(660, 600)
@@ -222,18 +272,32 @@ class FinderWindow(Gtk.ApplicationWindow):
         
         self.status_bar.append(country_code_label) 
         
-        self.country_code = Gtk.Entry(tooltip_text = ("Country Code\nfor example:\
+        self.country_code = Gtk.Entry(text="", tooltip_text = ("Country Code\nfor example:\
         \nde = Germany\ngb = Great Britain\nleave empty for None\
         \n\nedit and press Return"))
         self.country_code.set_max_length(2)
         self.country_code.set_max_width_chars(2)
         self.country_code.set_width_chars(2)
         
-        c_codes = ["de", "us", "gb", "ca", "fr", "pl", "be", "au", "at", "dk", "ie", "no", "ch", "fi"]
-        self.country_code_box = Gtk.ComboBoxText(tooltip_text="choose country code")
-        for country in c_codes:
-            self.country_code_box.append_text(country)
-        self.country_code_box.connect("changed", self.country_code_box_changed)
+        self.model_widget = Gio.ListStore(item_type=Widget)
+        self.sort_model_widget  = Gtk.SortListModel(model=self.model_widget) # FIXME: Gtk.Sorter?
+        self.filter_model_widget = Gtk.FilterListModel(model=self.sort_model_widget)
+        self.filter_widget = Gtk.CustomFilter.new(self._do_filter_widget_view, self.filter_model_widget)
+        self.filter_model_widget.set_filter(self.filter_widget)
+        
+        ## Create factory
+        factory_widget = Gtk.SignalListItemFactory()
+        factory_widget.connect("setup", self._on_factory_widget_setup)
+        factory_widget.connect("bind", self._on_factory_widget_bind)
+        
+        #c_codes = ["de", "us", "gb", "ca", "fr", "pl", "be", "au", "at", "dk", "ie", "no", "ch", "fi"]
+        self.country_code_box = Gtk.DropDown(model=self.filter_model_widget, factory=factory_widget)
+        self.country_code_box.set_tooltip_text("choose country code")
+        #self.country_code_box.set_enable_search(True)
+        for country in all_country_codes.splitlines():
+            e_code = country
+            self.model_widget.append(Widget(name=e_code))
+        self.country_code_box.connect("notify::selected-item", self.country_code_box_changed)
         
         self.country_code.connect("activate", self.find_stations)
         self.status_bar.append(self.country_code) 
@@ -283,6 +347,21 @@ class FinderWindow(Gtk.ApplicationWindow):
         
         self.search_entry.grab_focus()
         
+    def _on_factory_widget_setup(self, factory, list_item):
+        box = Gtk.Box(spacing=6, orientation=Gtk.Orientation.HORIZONTAL)
+        label = Gtk.Label()
+        box.append(label)
+        list_item.set_child(box)
+        
+    def _on_factory_widget_bind(self, factory, list_item):
+        box = list_item.get_child()
+        label = box.get_first_child()
+        widget = list_item.get_item()
+        label.set_text(widget.name)
+
+    def _do_filter_widget_view(self, item, filter_list_model):
+        return self.search_text_widget.upper() in item.name.upper()
+        
     def refresh_filter(self,widget):
         self.filter.refilter()
         
@@ -330,11 +409,13 @@ class FinderWindow(Gtk.ApplicationWindow):
             icon_image = GdkPixbuf.Pixbuf.new_from_file("icon_fav.png").scale_simple(20, 20, GdkPixbuf.InterpType.NEAREST)
             self.radio_model.append((section, CONFIG[section]['url'], icon_image))
         
-    def country_code_box_changed(self, wdg, *args):
+    def country_code_box_changed(self, dropdown, data):
         if self.search_entry.get_text():
-            c_code = wdg.get_active_text()
-            self.country_code.set_text(c_code)
-            self.find_stations()        
+            method = dropdown.get_selected_item()
+            if method is not None:
+                c_code = method.name.split("    ")[1].lower()
+                self.country_code.set_text(c_code)
+                self.find_stations()        
         
     def transfer_channel(self, *args):
         selected_path = self.icon_view.get_selected_items()[0]
