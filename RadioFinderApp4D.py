@@ -7,7 +7,7 @@ from gi.repository import Gtk, GdkPixbuf, Gst, Gio, Adw, GObject
 import requests
 import configparser
 import sys
-from time import sleep
+import socket
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -52,7 +52,30 @@ Spain    ES
 Switzerland    CH
 Sweden    SE"""
 
-BASE_URL =  "https://de1.api.radio-browser.info/"
+def get_radiobrowser_base_urls():
+    ### Get all base urls of all currently available radiobrowser servers
+    hosts = []
+    ips = socket.getaddrinfo('all.api.radio-browser.info',
+                             80, 0, 0, socket.IPPROTO_TCP)
+    for ip_tupple in ips:
+        ip = ip_tupple[4][0]
+        host_addr = socket.gethostbyaddr(ip)
+        if host_addr[0] not in hosts:
+            hosts.append(host_addr[0])
+
+    hosts.sort()
+    return list(map(lambda x: "https://" + x, hosts))
+
+# list of urls, use last
+for host in get_radiobrowser_base_urls()[-1:]:
+    BASE_URL =  f"{host}/"
+    
+print(f"BASE_URL={BASE_URL}")
+
+### get working urls at https://api.radio-browser.info/examples/serverlist_python3.py
+### https://de1.api.radio-browser.info/
+### https://nl1.api.radio-browser.info/
+### https://de2.api.radio-browser.info/
 
 endpoints = {
     "countries": {1: "{fmt}/countries", 2: "{fmt}/countries/{filter}"},
