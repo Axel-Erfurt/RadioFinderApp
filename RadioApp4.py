@@ -17,7 +17,7 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-CONFIG = configparser.ConfigParser()
+CONFIG = configparser.ConfigParser(strict=False)
 CONFIG.read('config')
 
 
@@ -35,11 +35,11 @@ class RadioWindow(Gtk.ApplicationWindow):
         self.set_size_request(720, 600)
 
         self.header = Gtk.HeaderBar()
-        #self.set_title('Radio Player')
         self.header.set_show_title_buttons(True)
         self.set_titlebar(self.header)
         
         self.remove_button = Gtk.Button.new_from_icon_name('edit-delete')
+        self.remove_button.set_tooltip_text("remove channel\nwill be saved on exit")
         self.remove_button.connect("clicked", self.delete_channel)
         
         self.header.pack_start(self.remove_button)
@@ -58,11 +58,12 @@ class RadioWindow(Gtk.ApplicationWindow):
         self.header.pack_start(self.vol_slider)
         
         self.mute_button = Gtk.Button.new_from_icon_name('audio-volume-high')
+        self.mute_button.set_tooltip_text("toggle mute")
         self.mute_button.connect("clicked", self.set_mute_status)
         
         
         self.search_entry = Gtk.SearchEntry(placeholder_text = "find ...")
-        self.search_entry.connect("changed", self.refresh_filter)
+        self.search_entry.connect("changed", self.visible_cb)
 
         self.header.pack_start(self.stop_button)        
         self.header.pack_start(self.mute_button)
@@ -70,12 +71,9 @@ class RadioWindow(Gtk.ApplicationWindow):
 
         self.model = Gtk.ListStore(object)
         self.model.set_column_types((str, str, GdkPixbuf.Pixbuf))
-        
-        self.filter = self.model.filter_new()
-        self.filter.set_visible_func(self.visible_cb)
 
         self.icon_view = Gtk.IconView()
-        self.icon_view.set_model(model=self.filter)
+        self.icon_view.set_model(model=self.model)
         self.icon_view.set_item_width(-1)
         self.icon_view.set_text_column(0)
         self.icon_view.set_pixbuf_column(2)
@@ -98,10 +96,12 @@ class RadioWindow(Gtk.ApplicationWindow):
         self.volume_label.set_name("volume_label")
         vbox.append(self.volume_label)
         
-        self.tag_label = Gtk.Label()
+        self.tag_label = Gtk.Label(lines=4)
+        self.tag_label.set_hexpand(False)
         self.tag_label.set_name("tag_label")
         self.tag_label.set_text("Info")
-        self.tag_label.set_wrap_mode(2)
+        self.tag_label.set_wrap_mode(0)
+        self.tag_label.set_natural_wrap_mode(2)
         self.tag_label.set_max_width_chars(100)
         self.tag_label.set_halign(Gtk.Align.CENTER)
         vbox.append(self.tag_label)
@@ -138,18 +138,21 @@ class RadioWindow(Gtk.ApplicationWindow):
         self.icon_view.emit("item-activated", path)
 
     def read_channels(self):
+        self.model.clear()
         for section in CONFIG.sections():
             icon_image_name = Gtk.Image.new_from_icon_name('audio-volume-high')
             icon_image = GdkPixbuf.Pixbuf.new_from_file("icon.png").scale_simple(20, 20, GdkPixbuf.InterpType.NEAREST)
             self.model.append((section, CONFIG[section]['url'], icon_image))
-            
-    def refresh_filter(self,widget):
-        self.filter.refilter()
         
-    def visible_cb(self, model, iter, data=None):
-        search_query = self.search_entry.get_text().lower()
-        value = model.get_value(iter, 0).lower()
-        return True if search_query in value else False
+    def visible_cb(self, entry, *args):
+        search_query = entry.get_text().lower()
+        if search_query == "":
+            self.read_channels()
+        for row in self.model:
+            if not search_query in row[0].lower():
+                path = row.path
+                iter = self.model.get_iter(path)
+                self.model.remove(iter)
             
     def set_volume(self, *args):
         vol = self.vol_slider.get_value()
