@@ -10,7 +10,6 @@ https://github.com/Axel-Erfurt
 import gi
 gi.require_versions({'Gtk': '3.0', 'Gdk': '3.0', 'Gst': '1.0'})
 import configparser
-import os
 from gi.repository import Gtk, Gdk, GdkPixbuf, Gst
 import requests
 
@@ -18,57 +17,13 @@ CONFIG = configparser.ConfigParser()
 CONFIG.read('config')
 
 
-CSS = """
-headerbar entry {
-    margin-top: 10px;
-    margin-bottom: 10px;
-    background: #ddd;
-}
-headerbar {
-    min-height: 24px;
-    padding-left: 2px;
-    padding-right: 2px;
-    margin: 0px;
-    padding: 10px;
-    background: lightsteelblue;
-    border: 0px;
-}
-headerbar label {
-    font-size: 10pt;
-    color: #5b5b5b;
-}
-#volume_label {
-    color: #555753;
-    font-size: 8pt;
-}
-#tag_label {
-    color: #555753;
-    font-size: 9pt;
-    font-weight: bold;
-    padding-top: 6px;
-    padding-bottom: 4px;
-}
-window, iconview {
-    background: #ddd;
-    color: #555753;
-}
-iconview:selected {
-    background: lightsteelblue;
-    color: #222;
-}
-"""
 
 class Window(Gtk.ApplicationWindow):
     def __init__(self):
         super(Gtk.ApplicationWindow, self).__init__()
         
-        # style
-        provider = Gtk.CssProvider()
-        provider.load_from_data(bytes(CSS.encode()))
-        style = self.get_style_context()
-        screen = Gdk.Screen.get_default()
-        priority = Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-        style.add_provider_for_screen(screen, provider, priority)
+        settings = Gtk.Settings.get_default()
+        settings.set_property("gtk-application-prefer-dark-theme", True)
         
         self.set_title('Radio Player')
         self.set_icon_name('applications-multimedia')
@@ -103,7 +58,9 @@ class Window(Gtk.ApplicationWindow):
         
         
         self.search_entry = Gtk.SearchEntry(placeholder_text = "find ...")
-        self.search_entry.connect("changed", self.refresh_filter)
+        self.search_entry.connect("changed", self.visible_cb)
+        self.search_entry.connect("icon-press", self.read_channels)
+        
 
         self.header.add(self.stop_button)        
         self.header.add(self.mute_button)
@@ -111,12 +68,9 @@ class Window(Gtk.ApplicationWindow):
 
         self.model = Gtk.ListStore(object)
         self.model.set_column_types((str, str, GdkPixbuf.Pixbuf))
-        
-        self.filter = self.model.filter_new()
-        self.filter.set_visible_func(self.visible_cb)
 
         self.icon_view = Gtk.IconView()
-        self.icon_view.set_model(model=self.filter)
+        self.icon_view.set_model(model=self.model)
         self.icon_view.set_item_width(-1)
         self.icon_view.set_text_column(0)
         self.icon_view.set_pixbuf_column(2)
@@ -156,19 +110,26 @@ class Window(Gtk.ApplicationWindow):
         self.bus.connect('message::tag', self.on_tag)
         self.read_channels()
 
-    def read_channels(self):
+    def read_channels(self, *args):
+        self.model.clear()
         for section in CONFIG.sections():
             icon = Gtk.IconTheme.get_default().load_icon(
-                    'multimedia-volume-control', 16, Gtk.IconLookupFlags.USE_BUILTIN)
+                    'audio-volume-high', 16, Gtk.IconLookupFlags.USE_BUILTIN)
             self.model.append((section, CONFIG[section]['url'], icon))
             
     def refresh_filter(self,widget):
         self.filter.refilter()
         
-    def visible_cb(self, model, iter, data=None):
-        search_query = self.search_entry.get_text().lower()
-        value = model.get_value(iter, 0).lower()
-        return True if search_query in value else False
+    def visible_cb(self, entry, *args):
+        search_query = entry.get_text().lower()
+        if search_query == "":
+            self.read_channels()
+        for row in self.model:
+            if not search_query in row[0].lower():
+                path = row.path
+                iter = self.model.get_iter(path)
+                self.model.remove(iter)
+
             
     def set_volume(self, *args):
         vol = self.vol_slider.get_value()
@@ -189,6 +150,7 @@ class Window(Gtk.ApplicationWindow):
             self.volume_label.set_text(f"Volume: {vol * 100:.0f} muted")
 
     def play(self, view, path):
+        print(view.get_selected_items()[0])
         url = self.model[path][1]
         if url.endswith(".pls"):
             url = self.getURLfromPLS(url)
@@ -268,3 +230,4 @@ if __name__ == '__main__':
     window.move(0, 0)
     window.show_all()
     Gtk.main()
+    
