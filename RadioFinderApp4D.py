@@ -12,7 +12,7 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-CONFIG = configparser.ConfigParser()
+CONFIG = configparser.ConfigParser(strict=False)
 #CONFIG.read('config_d')
 
 all_country_codes = """All Countries    
@@ -220,7 +220,6 @@ class FinderWindow(Gtk.ApplicationWindow):
 
         self.header.pack_start(self.stop_button)        
         self.header.pack_start(self.mute_button)
-        #self.header.pack_end(self.search_entry)   
 
         self.model = Gtk.ListStore(object)
         self.model.set_column_types((str, str, GdkPixbuf.Pixbuf))
@@ -254,18 +253,17 @@ class FinderWindow(Gtk.ApplicationWindow):
         ########################################################
         self.radio_model = Gtk.ListStore(object)
         self.radio_model.set_column_types((str, str, GdkPixbuf.Pixbuf))
-        self.filter = self.radio_model.filter_new()
-        self.filter.set_visible_func(self.visible_cb)
         favbox = Gtk.Box(orientation=1, homogeneous=False)
         
         self.search_fav_entry = Gtk.SearchEntry(placeholder_text = "filter favorites ...", 
                                                 tooltip_text = "filter favorites ...", 
                                                 margin_start=0, margin_end=6)
-        self.search_fav_entry.connect("changed", self.refresh_filter)       
+        self.search_fav_entry.connect("activate", self.visible_cb)
+        self.search_fav_entry.connect("search-changed", self.fav_entry_search_changed)
 
         self.icon_view_radio = Gtk.IconView()
         self.icon_view_radio.set_vexpand(True)
-        self.icon_view_radio.set_model(self.filter)
+        self.icon_view_radio.set_model(self.radio_model)
         self.icon_view_radio.set_item_width(90)
         self.icon_view_radio.set_text_column(0)
         self.icon_view_radio.set_pixbuf_column(2)
@@ -313,10 +311,8 @@ class FinderWindow(Gtk.ApplicationWindow):
         factory_widget.connect("setup", self._on_factory_widget_setup)
         factory_widget.connect("bind", self._on_factory_widget_bind)
         
-        #c_codes = ["de", "us", "gb", "ca", "fr", "pl", "be", "au", "at", "dk", "ie", "no", "ch", "fi"]
         self.country_code_box = Gtk.DropDown(model=self.filter_model_widget, factory=factory_widget)
         self.country_code_box.set_tooltip_text("choose country code")
-        #self.country_code_box.set_enable_search(True)
         for country in all_country_codes.splitlines():
             e_code = country
             self.model_widget.append(Widget(name=e_code))
@@ -388,10 +384,23 @@ class FinderWindow(Gtk.ApplicationWindow):
     def refresh_filter(self,widget):
         self.filter.refilter()
         
-    def visible_cb(self, model, iter, data=None):
-        search_query = self.search_fav_entry.get_text().lower()
-        value = self.radio_model.get_value(iter, 0).lower()
-        return True if search_query in value else False
+    def fav_entry_search_changed(self, entry, *args):
+        search_query = entry.get_text().lower()
+        if search_query == "":
+            self.read_channels()
+        for row in self.radio_model:
+            if not search_query in row[0].lower():
+                path = row.path
+                iter = self.radio_model.get_iter(path)
+                self.radio_model.remove(iter)
+        
+    def visible_cb(self, entry, *args):
+        search_query = entry.get_text().lower()
+        for row in self.radio_model:
+            if not search_query in row[0].lower():
+                path = row.path
+                iter = self.radio_model.get_iter(path)
+                self.radio_model.remove(iter)
         
     def handle_close(self, *args):
         self.write_channels()
@@ -427,8 +436,7 @@ class FinderWindow(Gtk.ApplicationWindow):
     def read_channels(self):
         self.radio_model.clear()
         CONFIG.read('config_d')
-        for section in CONFIG.sections():
-            icon_image_name = Gtk.Image.new_from_icon_name('audio-volume-high')
+        for section in CONFIG.sections(): # sorted(CONFIG.sections(), key=str.lower): #
             icon_image = GdkPixbuf.Pixbuf.new_from_file("icon_fav.png").scale_simple(20, 20, GdkPixbuf.InterpType.NEAREST)
             self.radio_model.append((section, CONFIG[section]['url'], icon_image))
         
@@ -547,11 +555,9 @@ class FinderWindow(Gtk.ApplicationWindow):
                     icon_image = GdkPixbuf.Pixbuf.new_from_file("icon.png").scale_simple(20, 20, GdkPixbuf.InterpType.NEAREST)
                     self.model.append((n, m, icon_image))
                     self.playlist += f"#EXTINF:{i+1},{n}\n{m}\n"
-        if i > 0:
-            self.tag_label.set_text(f"found {i} stations that contains '{mysearch}'")
-            self.scroll.get_vadjustment().set_value(0)
-        else:
-            self.tag_label.set_text(f"found no stations that contains '{mysearch}'")
+
+        self.tag_label.set_text(f"found {len(r)} stations that contains '{mysearch}'")
+        self.scroll.get_vadjustment().set_value(0)
                     
     def getURLfromPLS(self, inURL):
         headers = {
